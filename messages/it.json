@@ -1,0 +1,156 @@
+{
+  "app": {
+    "title": "HelpD",
+    "subtitle": "Sistema di Supporto per Fabbrica Logistica",
+    "selectRole": "Seleziona il tuo ruolo per continuare (Nessun login richiesto per i test)",
+    "testVersion": "Questa è una versione di test. Tutti i dati sono memorizzati localmente.",
+    "clickToTest": "Clicca su qualsiasi ruolo sopra per iniziare a testare l'applicazione.",
+    "onlineMode": "Modalità online (Test)"
+  },
+  "roles": {
+    "worker": {
+      "name": "Operatore",
+      "description": "Segnalare problemi e avviare timer"
+    },
+    "fls": {
+      "name": "Supporto di Prima Linea",
+      "description": "Monitorare problemi e fornire supporto"
+    },
+    "admin": {
+      "name": "Amministratore",
+      "description": "Gestire sistema e visualizzare analisi"
+    }
+  },
+  "worker": {
+    "title": "Dashboard Operatore",
+    "workplace": "Posto di lavoro",
+    "station": "Stazione",
+    "selectWorkplace": "Seleziona posto di lavoro",
+    "connectionStatus": {
+      "connected": "Connesso",
+      "unstable": "Instabile",
+      "offline": "Disconnesso"
+    },
+    "activeIssue": "Problema attivo",
+    "startedAt": "Iniziato alle",
+    "duration": "Durata",
+    "addNotes": "Aggiungi note",
+    "requestHelp": "Richiedi aiuto",
+    "stopTimer": "Ferma timer",
+    "reportIssue": "Segnala problema",
+    "recentIssues": "Problemi recenti",
+    "noIssues": "Nessun problema segnalato ancora",
+    "notes": "Note",
+    "describeIssue": "Descrivi il problema...",
+    "saveNotes": "Salva note",
+    "cancel": "Annulla"
+  },
+  "fls": {
+    "title": "Dashboard FLS",
+    "activeIssues": "Problemi attivi",
+    "escalated": "Escalato",
+    "resolvedToday": "Risolto oggi",
+    "totalDowntime": "Tempo di inattività totale",
+    "searchPlaceholder": "Cerca problemi, stazioni, note...",
+    "issuesOverview": "Panoramica problemi",
+    "noIssuesFound": "Nessun problema trovato",
+    "issueDetails": "Dettagli problema",
+    "started": "Iniziato",
+    "workerNotes": "Note operatore",
+    "flsNotes": "Note FLS",
+    "addYourNotes": "Aggiungi le tue note...",
+    "takePhoto": "Scatta foto",
+    "escalateToAdmin": "Escala ad amministratore",
+    "saveNotes": "Salva note",
+    "resolveIssue": "Risolvi problema",
+    "cameraFunctionality": "La funzionalità della fotocamera sarebbe implementata qui"
+  },
+  "admin": {
+    "title": "Dashboard Amministratore",
+    "totalStations": "Stazioni totali",
+    "issueTypes": "Tipi di problemi",
+    "overview": "Panoramica",
+    "issueManagement": "Gestione problemi",
+    "workplaces": "Posti di lavoro",
+    "settings": "Impostazioni",
+    "issuesToday": "Problemi oggi",
+    "totalDowntime": "Tempo di inattività totale",
+    "totalCost": "Costo totale",
+    "avgResolution": "Risoluzione media",
+    "issuesByCategory": "Problemi per categoria",
+    "costByStation": "Costo per stazione",
+    "addIssueType": "Aggiungi tipo problema",
+    "type": "Tipo",
+    "category": "Categoria",
+    "sla": "SLA",
+    "actions": "Azioni",
+    "workplaceConfiguration": "Configurazione posto di lavoro",
+    "station": "Stazione",
+    "costPerHour": "Costo/Ora",
+    "workerWage": "Salario operatore",
+    "status": "Stato",
+    "active": "Attivo",
+    "inactive": "Inattivo",
+    "showingFirst20": "Mostrando le prime 20 stazioni. Usa la ricerca per trovare stazioni specifiche.",
+    "systemSettings": "Impostazioni sistema",
+    "generalSettings": "Impostazioni generali",
+    "defaultSla": "SLA predefinito (minuti)",
+    "offlineWarning": "Avviso offline (minuti)",
+    "dataRetention": "Conservazione dati (giorni)",
+    "costConfiguration": "Configurazione costi",
+    "defaultCostPerHour": "Costo predefinito per ora",
+    "defaultWorkerWage": "Salario predefinito operatore",
+    "overheadPercentage": "Percentuale spese generali",
+    "resetToDefaults": "Ripristina predefiniti",
+    "saveSettings": "Salva impostazioni",
+    "addNewIssueType": "Aggiungi nuovo tipo problema",
+    "name": "Nome",
+    "namePlaceholder": "es. Problema di rete",
+    "selectCategory": "Seleziona categoria",
+    "slaMinutes": "SLA (minuti)",
+    "icon": "Icona",
+    "iconPlaceholder": "🔧",
+    "editIssueType": "Modifica tipo problema",
+    "updateIssueType": "Aggiorna tipo problema"
+  },
+  "issueTypes": {
+    "noMaterials": "Nessun materiale",
+    "machineFault": "Guasto macchina",
+    "conveyorStop": "Nastro trasportatore fermo",
+    "safetyIssue": "Problema di sicurezza",
+    "breakTime": "Tempo di pausa",
+    "qualityIssue": "Problema di qualità"
+  },
+  "categories": {
+    "technical": "Tecnico",
+    "supply": "Fornitura",
+    "safety": "Sicurezza",
+    "quality": "Qualità",
+    "personal": "Personale"
+  },
+  "status": {
+    "active": "Attivo",
+    "resolved": "Risolto",
+    "escalated": "Escalato"
+  },
+  "filters": {
+    "all": "Tutti",
+    "active": "Attivo",
+    "escalated": "Escalato",
+    "resolved": "Risolto"
+  },
+  "common": {
+    "home": "Home",
+    "back": "Indietro",
+    "close": "Chiudi",
+    "save": "Salva",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "add": "Aggiungi",
+    "update": "Aggiorna",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "yes": "Sì",
+    "no": "No"
+  }
+}

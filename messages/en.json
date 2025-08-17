@@ -1,0 +1,156 @@
+{
+  "app": {
+    "title": "HelpD",
+    "subtitle": "Logistics Factory Support System",
+    "selectRole": "Select your role to continue (No login required for testing)",
+    "testVersion": "This is a test version. All data is stored locally.",
+    "clickToTest": "Click any role above to start testing the application.",
+    "onlineMode": "Online Mode (Testing)"
+  },
+  "roles": {
+    "worker": {
+      "name": "Worker",
+      "description": "Report issues and start timers"
+    },
+    "fls": {
+      "name": "First Line Support",
+      "description": "Monitor issues and provide support"
+    },
+    "admin": {
+      "name": "Administrator",
+      "description": "Manage system and view analytics"
+    }
+  },
+  "worker": {
+    "title": "Worker Dashboard",
+    "workplace": "Workplace",
+    "station": "Station",
+    "selectWorkplace": "Select Workplace",
+    "connectionStatus": {
+      "connected": "Connected",
+      "unstable": "Unstable",
+      "offline": "Offline"
+    },
+    "activeIssue": "Active Issue",
+    "startedAt": "Started at",
+    "duration": "Duration",
+    "addNotes": "Add Notes",
+    "requestHelp": "Request Help",
+    "stopTimer": "Stop Timer",
+    "reportIssue": "Report Issue",
+    "recentIssues": "Recent Issues",
+    "noIssues": "No issues reported yet",
+    "notes": "Notes",
+    "describeIssue": "Describe the issue...",
+    "saveNotes": "Save Notes",
+    "cancel": "Cancel"
+  },
+  "fls": {
+    "title": "FLS Dashboard",
+    "activeIssues": "Active Issues",
+    "escalated": "Escalated",
+    "resolvedToday": "Resolved Today",
+    "totalDowntime": "Total Downtime",
+    "searchPlaceholder": "Search issues, stations, notes...",
+    "issuesOverview": "Issues Overview",
+    "noIssuesFound": "No issues found",
+    "issueDetails": "Issue Details",
+    "started": "Started",
+    "workerNotes": "Worker Notes",
+    "flsNotes": "FLS Notes",
+    "addYourNotes": "Add your notes...",
+    "takePhoto": "Take Photo",
+    "escalateToAdmin": "Escalate to Admin",
+    "saveNotes": "Save Notes",
+    "resolveIssue": "Resolve Issue",
+    "cameraFunctionality": "Camera functionality would be implemented here"
+  },
+  "admin": {
+    "title": "Administrator Dashboard",
+    "totalStations": "Total Stations",
+    "issueTypes": "Issue Types",
+    "overview": "Overview",
+    "issueManagement": "Issue Management",
+    "workplaces": "Workplaces",
+    "settings": "Settings",
+    "issuesToday": "Issues Today",
+    "totalDowntime": "Total Downtime",
+    "totalCost": "Total Cost",
+    "avgResolution": "Avg Resolution",
+    "issuesByCategory": "Issues by Category",
+    "costByStation": "Cost by Station",
+    "addIssueType": "Add Issue Type",
+    "type": "Type",
+    "category": "Category",
+    "sla": "SLA",
+    "actions": "Actions",
+    "workplaceConfiguration": "Workplace Configuration",
+    "station": "Station",
+    "costPerHour": "Cost/Hour",
+    "workerWage": "Worker Wage",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "showingFirst20": "Showing first 20 stations. Use search to find specific stations.",
+    "systemSettings": "System Settings",
+    "generalSettings": "General Settings",
+    "defaultSla": "Default SLA (minutes)",
+    "offlineWarning": "Offline Warning (minutes)",
+    "dataRetention": "Data Retention (days)",
+    "costConfiguration": "Cost Configuration",
+    "defaultCostPerHour": "Default Cost per Hour",
+    "defaultWorkerWage": "Default Worker Wage",
+    "overheadPercentage": "Overhead Percentage",
+    "resetToDefaults": "Reset to Defaults",
+    "saveSettings": "Save Settings",
+    "addNewIssueType": "Add New Issue Type",
+    "name": "Name",
+    "namePlaceholder": "e.g., Network Issue",
+    "selectCategory": "Select Category",
+    "slaMinutes": "SLA (minutes)",
+    "icon": "Icon",
+    "iconPlaceholder": "🔧",
+    "editIssueType": "Edit Issue Type",
+    "updateIssueType": "Update Issue Type"
+  },
+  "issueTypes": {
+    "noMaterials": "No Materials",
+    "machineFault": "Machine Fault",
+    "conveyorStop": "Conveyor Stopped",
+    "safetyIssue": "Safety Issue",
+    "breakTime": "Break Time",
+    "qualityIssue": "Quality Issue"
+  },
+  "categories": {
+    "technical": "Technical",
+    "supply": "Supply",
+    "safety": "Safety",
+    "quality": "Quality",
+    "personal": "Personal"
+  },
+  "status": {
+    "active": "Active",
+    "resolved": "Resolved",
+    "escalated": "Escalated"
+  },
+  "filters": {
+    "all": "All",
+    "active": "Active",
+    "escalated": "Escalated",
+    "resolved": "Resolved"
+  },
+  "common": {
+    "home": "Home",
+    "back": "Back",
+    "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "update": "Update",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
+  }
+}
