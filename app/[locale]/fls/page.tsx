@@ -34,6 +34,33 @@ export default function FLSPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(Date.now())
 
+  const loadIssuesFromStorage = useCallback(() => {
+    try {
+      const storedIssues = localStorage.getItem('helpd-issue-history')
+      if (!storedIssues) {
+        setIssues([])
+        setIsLoading(false)
+        return
+      }
+
+      const parsedIssues: Issue[] = JSON.parse(storedIssues).map((issue: any) => ({
+        ...issue,
+        startTime: new Date(issue.startTime),
+        endTime: issue.endTime ? new Date(issue.endTime) : undefined,
+        escalatedAt: issue.escalatedAt ? new Date(issue.escalatedAt) : undefined
+      }))
+
+      // Newest first keeps active operations at the top.
+      parsedIssues.sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
+      setIssues(parsedIssues)
+      setIsLoading(false)
+    } catch (err) {
+      console.error('Error loading issues from storage:', err)
+      setError('Failed to load issues data')
+      setIsLoading(false)
+    }
+  }, [])
+
   // Update current time every second for real-time timer display
   useEffect(() => {
     const timer = setInterval(() => {
@@ -43,71 +70,18 @@ export default function FLSPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Mock data for demonstration
+  // Load real worker issues and keep in sync across tabs.
   useEffect(() => {
-    const loadMockData = () => {
-      try {
-        const mockIssues: Issue[] = [
-          {
-            id: '1',
-            type: t('issueTypes.machineFault'),
-            startTime: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-            workplace: 5,
-            status: 'active',
-            notes: 'Machine making strange noises'
-          },
-          {
-            id: '2',
-            type: t('issueTypes.noMaterials'),
-            startTime: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
-            workplace: 12,
-            status: 'active',
-            notes: 'Waiting for delivery'
-          },
-          {
-            id: '3',
-            type: t('issueTypes.safetyIssue'),
-            startTime: new Date(Date.now() - 45 * 60 * 1000), // 45 minutes ago
-            endTime: new Date(Date.now() - 20 * 60 * 1000), // 20 minutes ago
-            duration: 25 * 60 * 1000, // 25 minutes
-            workplace: 8,
-            status: 'resolved',
-            notes: 'Spill on floor',
-            flsNotes: 'Cleaned up and marked area'
-          }
-        ]
-        setIssues(mockIssues)
-        setIsLoading(false)
-      } catch (err) {
-        console.error('Error loading mock data:', err)
-        setError('Failed to load issues data')
-        setIsLoading(false)
+    loadIssuesFromStorage()
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'helpd-issue-history') {
+        loadIssuesFromStorage()
       }
     }
 
-    loadMockData()
-  }, [t])
-
-  // Simulate new issues coming in
-  useEffect(() => {
-    const interval = setInterval(() => {
-      try {
-        const newIssue: Issue = {
-          id: Date.now().toString(),
-          type: t('issueTypes.conveyorStop'),
-          startTime: new Date(),
-          workplace: Math.floor(Math.random() * 20) + 1,
-          status: 'active',
-          notes: 'Conveyor belt stopped unexpectedly'
-        }
-        setIssues(prev => [newIssue, ...prev])
-      } catch (err) {
-        console.error('Error adding new issue:', err)
-      }
-    }, 30000) // New issue every 30 seconds for demo
-
-    return () => clearInterval(interval)
-  }, [t])
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [loadIssuesFromStorage])
 
   // Memoize filtered issues for performance
   const filteredIssues = useMemo(() => {
@@ -140,11 +114,15 @@ export default function FLSPage() {
 
   const resolveIssue = useCallback((issueId: string) => {
     try {
-      setIssues(prev => prev.map(issue =>
-        issue.id === issueId
-          ? { ...issue, status: 'resolved', endTime: new Date(), duration: Date.now() - issue.startTime.getTime() }
-          : issue
-      ))
+      setIssues(prev => {
+        const updated = prev.map(issue =>
+          issue.id === issueId
+            ? { ...issue, status: 'resolved' as const, endTime: new Date(), duration: Date.now() - issue.startTime.getTime() }
+            : issue
+        )
+        localStorage.setItem('helpd-issue-history', JSON.stringify(updated))
+        return updated
+      })
       setError(null)
     } catch (err) {
       console.error('Error resolving issue:', err)
@@ -164,7 +142,11 @@ export default function FLSPage() {
         escalatedAt: new Date()
       }
 
-      setIssues(prev => prev.map(i => i.id === issueId ? escalatedIssue : i))
+      setIssues(prev => {
+        const updated = prev.map(i => i.id === issueId ? escalatedIssue : i)
+        localStorage.setItem('helpd-issue-history', JSON.stringify(updated))
+        return updated
+      })
       
       // Store escalated issue in localStorage for admin access
       try {
@@ -189,11 +171,15 @@ export default function FLSPage() {
     }
 
     try {
-      setIssues(prev => prev.map(issue =>
-        issue.id === selectedIssue.id
-          ? { ...issue, flsNotes: flsNotes }
-          : issue
-      ))
+      setIssues(prev => {
+        const updated = prev.map(issue =>
+          issue.id === selectedIssue.id
+            ? { ...issue, flsNotes: flsNotes }
+            : issue
+        )
+        localStorage.setItem('helpd-issue-history', JSON.stringify(updated))
+        return updated
+      })
       setFlsNotes('')
       setError(null)
     } catch (err) {
