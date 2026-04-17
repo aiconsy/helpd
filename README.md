@@ -1,188 +1,107 @@
-# HelpD Logistics Support App
+# HelpD — Factory Floor Support
 
-A modern, multilingual logistics support application designed for factory workers, FLS (First Line Support), and administrators. Built with Next.js 14, TypeScript, and Tailwind CSS.
+A polished, real-time production-issue tracking web app for factory teams.
+Workers report problems from the floor, First Line Support reacts, and administrators analyze the whole operation — all in one lightweight, multilingual Next.js app.
 
-## 🚀 Features
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Faiconsy%2Fhelpd&project-name=helpd&repository-name=helpd)
 
-- **Multi-language Support**: English, German, Spanish, and Italian
-- **Role-based Access**: Worker, FLS, and Admin interfaces
-- **Real-time Issue Tracking**: Report and monitor production issues
-- **PWA Support**: Progressive Web App with offline capabilities
-- **Responsive Design**: Mobile-first design for factory floor use
-- **Local Storage**: Data persistence without external database
+## Highlights
 
-## 🛠️ Tech Stack
+- **3 role-focused dashboards**: Worker, First Line Support (FLS), Administrator — all sharing the same live data.
+- **Real-time issue timers** that keep ticking across every view.
+- **4 built-in languages**: English, German, Spanish, Italian (via `next-intl`).
+- **Works offline** — PWA-ready with a generated service worker (`next-pwa`).
+- **Admin analytics**: KPIs, issues by category, issues by station, JSON export, reseed/reset demo data.
+- **Zero backend** required — data is persisted in `localStorage`, perfect for demos and stakeholder walkthroughs.
 
-- **Frontend**: Next.js 14, React 18, TypeScript
-- **Styling**: Tailwind CSS
-- **Internationalization**: next-intl
-- **PWA**: next-pwa
-- **Icons**: Lucide React
-- **Build Tool**: Next.js App Router
+## Screens
 
-## 📱 User Roles
+- `/` → redirects to the user's default locale.
+- `/{locale}` → landing page with live stats and role cards.
+- `/{locale}/worker` → report issues, start/stop timers, add notes.
+- `/{locale}/fls` → monitor, filter, resolve, and escalate issues.
+- `/{locale}/admin` → KPIs, charts, per-station breakdown, data tools.
 
-### 👷 Worker Interface
-- Report production issues
-- Track issue duration
-- Request FLS assistance
-- Add notes to issues
-- Select workplace station
+Supported locales: `en`, `de`, `es`, `it`.
 
-### 👨‍💼 FLS Interface
-- Monitor active issues
-- Escalate critical problems
-- Add resolution notes
-- Track issue history
-- Real-time updates
+## Tech stack
 
-### 👑 Admin Interface
-- System overview dashboard
-- Issue type management
-- Workplace configuration
-- Escalated issue handling
-- Performance analytics
+- **Next.js 14** (App Router, React 18, TypeScript)
+- **Tailwind CSS** with custom design tokens and animations
+- **next-intl** for i18n
+- **next-pwa** for offline/installable support
+- **lucide-react** for iconography
+- **Inter** as the primary typeface
 
-## 🚀 Getting Started
+## Getting started
 
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
+Requirements: **Node.js 18+** and npm.
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd helpd
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Run development server**
-   ```bash
-   npm run dev
-   ```
-
-4. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-### Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
-
-## 🌍 Internationalization
-
-The app supports multiple languages:
-- **English** (`/en`) - Default language
-- **German** (`/de`) - Deutsch
-- **Spanish** (`/es`) - Español  
-- **Italian** (`/it`) - Italiano
-
-Language files are located in `messages/` directory.
-
-## 📁 Project Structure
-
-```
-helpd/
-├── app/                    # Next.js App Router
-│   ├── [locale]/          # Localized routes
-│   │   ├── admin/         # Admin interface
-│   │   ├── fls/           # FLS interface
-│   │   ├── worker/        # Worker interface
-│   │   └── layout.tsx     # Localized layout
-│   ├── globals.css        # Global styles
-│   └── layout.tsx         # Root layout
-├── components/             # Reusable components
-├── messages/               # Translation files
-├── i18n/                  # Internationalization config
-├── public/                 # Static assets
-└── package.json           # Dependencies
+```bash
+npm install
+npm run dev
 ```
 
-## 🔧 Configuration
+Open http://localhost:3000 — the landing page auto-seeds realistic demo data on first visit.
 
-### Environment Variables
-No environment variables required for basic functionality.
+### Scripts
 
-### PWA Configuration
-- Service worker automatically generated
-- Offline support enabled
-- App manifest included
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start the dev server on port 3000 |
+| `npm run build` | Production build (static/ISR-ready) |
+| `npm run start` | Serve the production build |
+| `npm run lint` | Run ESLint (`next/core-web-vitals`) |
 
-## 🚀 Deployment
+### Project structure
 
-### Build for Production
+```
+app/
+  layout.tsx              # Root layout + Inter font + metadata
+  page.tsx                # Redirects to /en
+  [locale]/
+    layout.tsx            # Header with logo + language switcher + footer
+    page.tsx              # Redesigned landing page
+    worker/page.tsx       # Worker dashboard
+    fls/page.tsx          # FLS dashboard
+    admin/page.tsx        # Admin dashboard with analytics
+components/
+  LanguageSwitcher.tsx    # Accessible dropdown, 4 locales
+lib/
+  issues.ts               # Typed shared storage (load/save/update/subscribe) + demo seeding
+messages/
+  en.json de.json es.json it.json
+public/
+  manifest.json icon-*.png
+```
+
+## Demo data & presentation controls
+
+The landing page and the Admin dashboard include:
+
+- **Reseed demo data** — resets storage to a rich, realistic demo dataset (active, escalated, resolved issues).
+- **Reset all data** — clears everything for a fresh walkthrough.
+- **Export JSON** (Admin) — downloads the current issue history.
+
+All three roles read/write through `lib/issues.ts`, so changes in one view instantly appear in the others — even in the same tab (via a custom `helpd:issues-updated` event) and across tabs (via the `storage` event).
+
+## Deploy
+
+This app is pure client-side — no environment variables, no database, no backend service.
+
+### One-click on Vercel
+
+Click the badge at the top of this README. Vercel will import the repo, detect Next.js automatically, and deploy on the default settings.
+
+### Manual
+
 ```bash
 npm run build
+npm run start
 ```
 
-### Static Export (for static hosting)
-The app is configured for static export and can be deployed to:
-- Vercel
-- Netlify
-- GitHub Pages
-- Any static hosting service
+Or deploy the output to any Node.js-compatible host.
 
-### Hostinger Deployment
-For Hostinger hosting, additional configuration may be required due to Node.js limitations.
+## License
 
-## 🧪 Testing
-
-1. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-2. **Test different user roles**
-   - Navigate to `/en/worker` for worker interface
-   - Navigate to `/en/fls` for FLS interface
-   - Navigate to `/en/admin` for admin interface
-
-3. **Test language switching**
-   - Use the language switcher in the header
-   - Verify all content is properly translated
-
-4. **Test PWA features**
-   - Install the app on mobile devices
-   - Test offline functionality
-
-## 🐛 Known Issues
-
-- None currently identified
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue in the repository
-- Contact the development team
-
-## 🔄 Version History
-
-- **v0.1.0** - Initial release with core functionality
-  - Multi-language support
-  - Role-based interfaces
-  - Issue tracking system
-  - PWA capabilities
-
----
-
-**Built with ❤️ for modern logistics operations**
+MIT.

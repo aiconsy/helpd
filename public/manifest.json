@@ -1,11 +1,11 @@
 {
-  "name": "HelpD Logistics Support",
+  "name": "HelpD — Factory Floor Support",
   "short_name": "HelpD",
-  "description": "Logistics factory worker support application",
+  "description": "Real-time production issue tracking for factory floors.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#3B82F6",
+  "theme_color": "#2563EB",
   "orientation": "portrait-primary",
   "icons": [
     {
