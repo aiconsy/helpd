@@ -1,495 +1,325 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Home, AlertTriangle, CheckCircle, Clock, MapPin, Camera, TrendingUp, Search } from 'lucide-react'
-import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  MapPin,
+  TrendingUp,
+  Search,
+  Camera,
+  XCircle
+} from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useParams } from 'next/navigation'
+import {
+  Issue,
+  formatDuration,
+  loadIssues,
+  subscribeIssues,
+  updateIssue
+} from '@/lib/issues'
 
-interface Issue {
-  id: string
-  type: string
-  startTime: Date
-  endTime?: Date
-  duration?: number
-  notes?: string
-  workplace: number
-  status: 'active' | 'resolved' | 'escalated'
-  escalatedBy?: string
-  escalatedAt?: Date
-  flsNotes?: string
-  photos?: string[]
-}
+type Filter = 'all' | 'active' | 'escalated' | 'resolved'
 
 export default function FLSPage() {
   const t = useTranslations()
-  const params = useParams()
+
   const [issues, setIssues] = useState<Issue[]>([])
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
-  const [showIssueModal, setShowIssueModal] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Issue | null>(null)
+  const [filter, setFilter] = useState<Filter>('all')
+  const [query, setQuery] = useState('')
   const [flsNotes, setFlsNotes] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'escalated' | 'resolved'>('all')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [now, setNow] = useState(Date.now())
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [currentTime, setCurrentTime] = useState(Date.now())
 
-  const loadIssuesFromStorage = useCallback(() => {
-    try {
-      const storedIssues = localStorage.getItem('helpd-issue-history')
-      if (!storedIssues) {
-        setIssues([])
-        setIsLoading(false)
-        return
-      }
-
-      const parsedIssues: Issue[] = JSON.parse(storedIssues).map((issue: any) => ({
-        ...issue,
-        startTime: new Date(issue.startTime),
-        endTime: issue.endTime ? new Date(issue.endTime) : undefined,
-        escalatedAt: issue.escalatedAt ? new Date(issue.escalatedAt) : undefined
-      }))
-
-      // Newest first keeps active operations at the top.
-      parsedIssues.sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
-      setIssues(parsedIssues)
-      setIsLoading(false)
-    } catch (err) {
-      console.error('Error loading issues from storage:', err)
-      setError('Failed to load issues data')
-      setIsLoading(false)
-    }
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
   }, [])
 
-  // Update current time every second for real-time timer display
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-
-    return () => clearInterval(timer)
+    setIssues(loadIssues())
+    setLoading(false)
+    return subscribeIssues(() => setIssues(loadIssues()))
   }, [])
 
-  // Load real worker issues and keep in sync across tabs.
-  useEffect(() => {
-    loadIssuesFromStorage()
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'helpd-issue-history') {
-        loadIssuesFromStorage()
-      }
-    }
-
-    window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
-  }, [loadIssuesFromStorage])
-
-  // Memoize filtered issues for performance
-  const filteredIssues = useMemo(() => {
-    return issues.filter(issue => {
-      const matchesStatus = filterStatus === 'all' || issue.status === filterStatus
-      const matchesSearch = searchTerm === '' || 
-        issue.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.workplace.toString().includes(searchTerm)
-      
-      return matchesStatus && matchesSearch
+  const filtered = useMemo(() => {
+    return issues.filter((issue) => {
+      const statusMatch = filter === 'all' || issue.status === filter
+      const q = query.toLowerCase()
+      const qMatch =
+        q === '' ||
+        issue.type.toLowerCase().includes(q) ||
+        (issue.notes ?? '').toLowerCase().includes(q) ||
+        issue.workplace.toString().includes(q)
+      return statusMatch && qMatch
     })
-  }, [issues, filterStatus, searchTerm])
+  }, [issues, filter, query])
 
-  // Memoize statistics for performance
   const stats = useMemo(() => {
-    const activeCount = issues.filter(i => i.status === 'active').length
-    const escalatedCount = issues.filter(i => i.status === 'escalated').length
-    const resolvedCount = issues.filter(i => i.status === 'resolved').length
-    const totalDuration = issues.filter(i => i.status === 'resolved').reduce((acc: number, issue) => 
-      acc + (issue.duration || 0), 0)
-    
+    const active = issues.filter((i) => i.status === 'active').length
+    const escalated = issues.filter((i) => i.status === 'escalated').length
+    const resolved = issues.filter((i) => i.status === 'resolved').length
+    const downtimeHours =
+      issues
+        .filter((i) => i.status === 'resolved')
+        .reduce((acc, i) => acc + (i.duration ?? 0), 0) /
+      (1000 * 60 * 60)
     return {
-      active: activeCount,
-      escalated: escalatedCount,
-      resolved: resolvedCount,
-      totalDowntime: (totalDuration / (1000 * 60 * 60)).toFixed(1)
+      active,
+      escalated,
+      resolved,
+      downtime: downtimeHours.toFixed(1)
     }
   }, [issues])
 
-  const resolveIssue = useCallback((issueId: string) => {
-    try {
-      setIssues(prev => {
-        const updated = prev.map(issue =>
-          issue.id === issueId
-            ? { ...issue, status: 'resolved' as const, endTime: new Date(), duration: Date.now() - issue.startTime.getTime() }
-            : issue
-        )
-        localStorage.setItem('helpd-issue-history', JSON.stringify(updated))
-        return updated
-      })
-      setError(null)
-    } catch (err) {
-      console.error('Error resolving issue:', err)
-      setError('Failed to resolve issue')
-    }
+  const resolveIssue = useCallback((id: string) => {
+    const issue = loadIssues().find((i) => i.id === id)
+    if (!issue) return
+    updateIssue(id, {
+      status: 'resolved',
+      endTime: new Date().toISOString(),
+      duration: Date.now() - new Date(issue.startTime).getTime()
+    })
   }, [])
 
-  const escalateIssue = useCallback((issueId: string) => {
-    try {
-      const issue = issues.find(i => i.id === issueId)
-      if (!issue) return
+  const escalateIssue = useCallback((id: string) => {
+    updateIssue(id, {
+      status: 'escalated',
+      escalatedBy: 'FLS User',
+      escalatedAt: new Date().toISOString()
+    })
+  }, [])
 
-      const escalatedIssue: Issue = {
-        ...issue,
-        status: 'escalated',
-        escalatedBy: 'FLS User',
-        escalatedAt: new Date()
-      }
-
-      setIssues(prev => {
-        const updated = prev.map(i => i.id === issueId ? escalatedIssue : i)
-        localStorage.setItem('helpd-issue-history', JSON.stringify(updated))
-        return updated
-      })
-      
-      // Store escalated issue in localStorage for admin access
-      try {
-        const escalatedIssues = JSON.parse(localStorage.getItem('helpd-escalated-issues') || '[]')
-        escalatedIssues.push(escalatedIssue)
-        localStorage.setItem('helpd-escalated-issues', JSON.stringify(escalatedIssues))
-      } catch (err) {
-        console.error('Error storing escalated issue:', err)
-      }
-
-      setError(null)
-    } catch (err) {
-      console.error('Error escalating issue:', err)
-      setError('Failed to escalate issue')
-    }
-  }, [issues])
-
-  const addFlsNotes = useCallback(() => {
-    if (!selectedIssue || !flsNotes.trim()) {
-      setError('Please enter some notes before saving')
+  const saveFlsNotes = useCallback(() => {
+    if (!selected || !flsNotes.trim()) {
+      setError(t('fls.emptyNotes'))
       return
     }
+    updateIssue(selected.id, { flsNotes })
+    setSelected((prev) => (prev ? { ...prev, flsNotes } : prev))
+    setFlsNotes('')
+  }, [selected, flsNotes, t])
 
-    try {
-      setIssues(prev => {
-        const updated = prev.map(issue =>
-          issue.id === selectedIssue.id
-            ? { ...issue, flsNotes: flsNotes }
-            : issue
-        )
-        localStorage.setItem('helpd-issue-history', JSON.stringify(updated))
-        return updated
-      })
-      setFlsNotes('')
-      setError(null)
-    } catch (err) {
-      console.error('Error adding FLS notes:', err)
-      setError('Failed to save notes')
-    }
-  }, [selectedIssue, flsNotes])
-
-  const takePhoto = useCallback(() => {
-    // Simulate photo functionality
-    alert(t('fls.cameraFunctionality'))
-  }, [t])
-
-  const formatDuration = useCallback((duration: number) => {
-    const minutes = Math.floor(duration / (1000 * 60))
-    const seconds = Math.floor((duration % (1000 * 60)) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }, [])
-
-  const clearError = useCallback(() => {
-    setError(null)
-  }, [])
-
-  // Auto-clear error after 5 seconds
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(clearError, 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [error, clearError])
+    if (!error) return
+    const id = setTimeout(() => setError(null), 4000)
+    return () => clearTimeout(id)
+  }, [error])
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!selected) return
+    const handler = (e: KeyboardEvent) => e.key === 'Escape' && setSelected(null)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [selected])
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading issues...</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex items-center justify-center">
+        <div className="inline-flex items-center gap-3 text-slate-500">
+          <div className="h-5 w-5 rounded-full border-2 border-slate-200 border-t-brand-500 animate-spin" />
+          {t('fls.loading')}
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      {/* Error Banner */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
       {error && (
-        <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-3 text-center z-50">
-          <div className="flex items-center justify-center space-x-2">
-            <AlertTriangle className="w-4 h-4" />
-            <span>{error}</span>
-            <button 
-              onClick={clearError}
-              className="ml-2 text-white hover:text-red-100"
-              aria-label="Dismiss error"
-            >
-              ✕
-            </button>
-          </div>
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-800 p-3 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4" />
+          <span className="text-sm">{error}</span>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <Link href={`/${params.locale}`} className="btn-secondary" aria-label="Go to home page">
-              <Home className="w-5 h-5" />
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">{t('fls.title')}</h1>
-          </div>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+          {t('fls.title')}
+        </h1>
+        <p className="text-sm text-slate-600 mt-1">{t('fls.subtitle')}</p>
+      </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{t('fls.activeIssues')}</p>
-                <div className="text-2xl font-bold text-blue-600">
-                  {stats.active}
-                </div>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-blue-500" />
-            </div>
-          </div>
-          
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{t('fls.escalated')}</p>
-                <div className="text-2xl font-bold text-orange-600">
-                  {stats.escalated}
-                </div>
-              </div>
-              <TrendingUp className="w-8 h-8 text-orange-500" />
-            </div>
-          </div>
-          
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{t('fls.resolvedToday')}</p>
-                <div className="text-2xl font-bold text-green-600">
-                  {stats.resolved}
-                </div>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-          
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{t('fls.totalDowntime')}</p>
-                <div className="text-2xl font-bold text-purple-600">
-                  {stats.totalDowntime}h
-                </div>
-              </div>
-              <Clock className="w-8 h-8 text-purple-500" />
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <StatCard tone="blue" icon={AlertTriangle} label={t('fls.activeIssues')} value={stats.active} />
+        <StatCard tone="amber" icon={TrendingUp} label={t('fls.escalated')} value={stats.escalated} />
+        <StatCard tone="green" icon={CheckCircle} label={t('fls.resolvedToday')} value={stats.resolved} />
+        <StatCard tone="slate" icon={Clock} label={t('fls.totalDowntime')} value={`${stats.downtime}h`} />
+      </div>
 
-        {/* Filters and Search */}
-        <div className="card mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder={t('fls.searchPlaceholder')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-label="Search issues"
-              />
-            </div>
-            
-            <div className="flex space-x-2">
-              {(['all', 'active', 'escalated', 'resolved'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    filterStatus === status
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  aria-label={`Filter by ${t(`filters.${status}`)}`}
-                >
-                  {t(`filters.${status}`)}
-                </button>
-              ))}
-            </div>
+      <div className="card mb-6">
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              className="input pl-9"
+              placeholder={t('fls.searchPlaceholder')}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
-        </div>
-
-        {/* Issues List */}
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">{t('fls.issuesOverview')}</h2>
-          
-          {filteredIssues.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">{t('fls.noIssuesFound')}</p>
-          ) : (
-            <div className="space-y-3">
-              {filteredIssues.map((issue) => (
-                <div
-                  key={issue.id}
-                  onClick={() => {
-                    setSelectedIssue(issue)
-                    setShowIssueModal(true)
-                  }}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setSelectedIssue(issue)
-                      setShowIssueModal(true)
-                    }
-                  }}
-                  role="button"
-                  aria-label={`View details for ${issue.type} at station ${issue.workplace}`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className={`w-3 h-3 rounded-full ${
-                      issue.status === 'active' ? 'bg-blue-500' :
-                      issue.status === 'resolved' ? 'bg-green-500' : 'bg-orange-500'
-                    }`} aria-hidden="true"></div>
-                    <div>
-                      <p className="font-medium">{issue.type}</p>
-                      <p className="text-sm text-gray-600">
-                        <MapPin className="w-4 h-4 inline mr-1" />
-                        {t('worker.station')} {issue.workplace} • {issue.startTime.toLocaleTimeString()}
-                      </p>
-                      {issue.notes && (
-                        <p className="text-sm text-gray-500 mt-1">{issue.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    {issue.status === 'active' ? (
-                      <p className="text-sm text-gray-600">
-                        {formatDuration(currentTime - issue.startTime.getTime())}
-                      </p>
-                    ) : issue.duration ? (
-                      <p className="text-sm text-gray-600">
-                        {formatDuration(issue.duration)}
-                      </p>
-                    ) : null}
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      issue.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                      issue.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                      'bg-orange-100 text-orange-800'
-                    }`}>
-                      {t(`status.${issue.status}`)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'active', 'escalated', 'resolved'] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  filter === f
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {t(`filters.${f}`)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Issue Details Modal */}
-      {showIssueModal && selectedIssue && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{t('fls.issueDetails')}</h3>
+      <div className="card">
+        <h2 className="section-title mb-3">{t('fls.issuesOverview')}</h2>
+        {filtered.length === 0 ? (
+          <p className="text-sm text-slate-500 py-10 text-center">
+            {t('fls.noIssuesFound')}
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {filtered.map((issue) => (
+              <li key={issue.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(issue)
+                    setFlsNotes('')
+                  }}
+                  className="w-full flex items-center justify-between gap-4 py-4 text-left hover:bg-slate-50 rounded-xl px-3 -mx-3 transition-colors"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <span
+                      className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                        issue.status === 'active'
+                          ? 'bg-brand-500'
+                          : issue.status === 'escalated'
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900 truncate">{issue.type}</div>
+                      <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {t('worker.station')} {issue.workplace} ·{' '}
+                        {new Date(issue.startTime).toLocaleTimeString()}
+                      </div>
+                      {issue.notes && (
+                        <div className="text-xs text-slate-500 mt-1 truncate">{issue.notes}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-sm text-slate-700 tabular-nums">
+                      {issue.status === 'active'
+                        ? formatDuration(now - new Date(issue.startTime).getTime())
+                        : issue.duration
+                        ? formatDuration(issue.duration)
+                        : '—'}
+                    </span>
+                    <StatusPill status={issue.status} />
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {selected && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="bg-white w-full max-w-2xl rounded-2xl shadow-pop p-6 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <span className="pill-slate">
+                  {t('worker.station')} {selected.workplace}
+                </span>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900">{selected.type}</h3>
+                <div className="text-xs text-slate-500">
+                  {t('fls.started')}{' '}
+                  {new Date(selected.startTime).toLocaleTimeString()}
+                </div>
+              </div>
               <button
-                onClick={() => setShowIssueModal(false)}
-                className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
-                aria-label="Close modal"
+                className="btn-ghost"
+                onClick={() => setSelected(null)}
+                aria-label={t('common.close')}
               >
-                ✕
+                <XCircle className="h-5 w-5" />
               </button>
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <p className="font-medium">{selectedIssue.type}</p>
-                <p className="text-sm text-gray-600">
-                  {t('worker.station')} {selectedIssue.workplace} • {t('fls.started')} {selectedIssue.startTime.toLocaleTimeString()}
-                </p>
-              </div>
-              
-              {selectedIssue.notes && (
-                <div>
-                  <p className="font-medium text-sm text-gray-700">{t('fls.workerNotes')}</p>
-                  <p className="text-sm text-gray-600">{selectedIssue.notes}</p>
+
+            <div className="mt-4 space-y-3">
+              {selected.notes && (
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    {t('fls.workerNotes')}
+                  </div>
+                  <div className="text-sm text-slate-800 mt-1">{selected.notes}</div>
                 </div>
               )}
-              
-              {selectedIssue.flsNotes && (
-                <div>
-                  <p className="font-medium text-sm text-gray-700">{t('fls.flsNotes')}</p>
-                  <p className="text-sm text-gray-600">{selectedIssue.flsNotes}</p>
+              {selected.flsNotes && (
+                <div className="rounded-xl bg-emerald-50 p-3">
+                  <div className="text-xs font-medium text-emerald-700 uppercase tracking-wider">
+                    {t('fls.flsNotes')}
+                  </div>
+                  <div className="text-sm text-emerald-900 mt-1">{selected.flsNotes}</div>
                 </div>
               )}
-              
+
               <div>
-                <p className="font-medium text-sm text-gray-700">{t('fls.flsNotes')}</p>
+                <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  {t('fls.flsNotes')}
+                </div>
                 <textarea
+                  className="input mt-1 h-24 resize-none"
+                  placeholder={t('fls.addYourNotes')}
                   value={flsNotes}
                   onChange={(e) => setFlsNotes(e.target.value)}
-                  placeholder={t('fls.addYourNotes')}
-                  className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-label="Add FLS notes"
                 />
               </div>
-              
-              <div className="flex space-x-3">
+
+              <div className="flex flex-wrap gap-2 pt-2">
                 <button
-                  onClick={takePhoto}
                   className="btn-secondary"
-                  aria-label="Take photo of issue"
+                  onClick={() => alert(t('fls.cameraFunctionality'))}
                 >
-                  <Camera className="w-4 h-4 mr-2" />
-                  {t('fls.takePhoto')}
+                  <Camera className="h-4 w-4" /> {t('fls.takePhoto')}
                 </button>
-                {selectedIssue.status === 'active' && (
-                  <button
-                    onClick={() => escalateIssue(selectedIssue.id)}
-                    className="btn-secondary"
-                    aria-label="Escalate issue to administrator"
-                  >
-                    <TrendingUp className="w-4 h-4 mr-2" />
-                    {t('fls.escalateToAdmin')}
+                {selected.status === 'active' && (
+                  <button className="btn-secondary" onClick={() => escalateIssue(selected.id)}>
+                    <TrendingUp className="h-4 w-4" /> {t('fls.escalateToAdmin')}
                   </button>
                 )}
-                <button
-                  onClick={addFlsNotes}
-                  className="btn-primary"
-                  aria-label="Save FLS notes"
-                >
+                <button className="btn-primary" onClick={saveFlsNotes}>
                   {t('fls.saveNotes')}
                 </button>
-                {selectedIssue.status === 'active' && (
+                {selected.status === 'active' && (
                   <button
-                    onClick={() => {
-                      resolveIssue(selectedIssue.id)
-                      setShowIssueModal(false)
-                    }}
                     className="btn-primary"
-                    aria-label="Resolve this issue"
+                    onClick={() => {
+                      resolveIssue(selected.id)
+                      setSelected(null)
+                    }}
                   >
-                    {t('fls.resolveIssue')}
+                    <CheckCircle className="h-4 w-4" /> {t('fls.resolveIssue')}
                   </button>
                 )}
               </div>
@@ -499,4 +329,45 @@ export default function FLSPage() {
       )}
     </div>
   )
+}
+
+function StatCard({
+  tone,
+  icon: Icon,
+  label,
+  value
+}: {
+  tone: 'blue' | 'amber' | 'green' | 'slate'
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: number | string
+}) {
+  const toneMap = {
+    blue: 'bg-brand-50 text-brand-700',
+    amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    slate: 'bg-slate-100 text-slate-700'
+  }[tone]
+  return (
+    <div className="stat-card">
+      <div>
+        <div className="text-xs text-slate-500">{label}</div>
+        <div className="text-2xl font-semibold text-slate-900 mt-0.5">{value}</div>
+      </div>
+      <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${toneMap}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+    </div>
+  )
+}
+
+function StatusPill({ status }: { status: Issue['status'] }) {
+  const t = useTranslations()
+  const cls =
+    status === 'active'
+      ? 'pill-blue'
+      : status === 'resolved'
+      ? 'pill-green'
+      : 'pill-amber'
+  return <span className={cls}>{t(`status.${status}`)}</span>
 }

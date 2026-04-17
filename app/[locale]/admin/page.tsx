@@ -1,751 +1,448 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Home, Settings, BarChart3, Plus, Edit, Trash2, MapPin, Clock, AlertTriangle } from 'lucide-react'
-import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  BarChart3,
+  Settings,
+  MapPin,
+  AlertTriangle,
+  Clock,
+  Activity,
+  RefreshCcw,
+  Trash2,
+  Download
+} from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useParams } from 'next/navigation'
+import {
+  DEFAULT_ISSUE_TYPES,
+  Issue,
+  formatDuration,
+  loadIssues,
+  resetIssues,
+  seedDemoIssues,
+  subscribeIssues
+} from '@/lib/issues'
 
-interface IssueType {
-  id: string
-  name: string
-  color: string
-  icon: string
-  category: string
-  slaMinutes: number
-}
+type AdminTab = 'overview' | 'issues' | 'workplaces' | 'escalated'
 
 interface Workplace {
   id: number
   name: string
   costPerHour: number
-  workerWage: number
   status: 'active' | 'inactive'
-}
-
-interface EscalatedIssue {
-  id: string
-  type: string
-  startTime: Date
-  workplace: number
-  status: 'escalated'
-  escalatedBy: string
-  escalatedAt: Date
-  notes?: string
-  flsNotes?: string
 }
 
 export default function AdminPage() {
   const t = useTranslations()
-  const params = useParams()
-  const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'workplaces' | 'settings' | 'escalated'>('overview')
-  const [escalatedIssues, setEscalatedIssues] = useState<EscalatedIssue[]>([])
-  const [currentTime, setCurrentTime] = useState(Date.now())
+  const [tab, setTab] = useState<AdminTab>('overview')
+  const [issues, setIssues] = useState<Issue[]>([])
+  const [now, setNow] = useState(Date.now())
 
-  // Update current time every second for real-time displays
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-
-    return () => clearInterval(timer)
+    setIssues(loadIssues())
+    return subscribeIssues(() => setIssues(loadIssues()))
   }, [])
 
-  // Load escalated issues from localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('helpd-escalated-issues')
-      if (stored) {
-        const parsed = JSON.parse(stored).map((issue: any) => ({
-          ...issue,
-          startTime: new Date(issue.startTime),
-          escalatedAt: new Date(issue.escalatedAt)
-        }))
-        setEscalatedIssues(parsed)
-      }
-    } catch (err) {
-      console.error('Error loading escalated issues:', err)
-    }
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
   }, [])
 
-  // Listen for new escalated issues
-  useEffect(() => {
-    const handleStorageChange = () => {
-      try {
-        const stored = localStorage.getItem('helpd-escalated-issues')
-        if (stored) {
-          const parsed = JSON.parse(stored).map((issue: any) => ({
-            ...issue,
-            startTime: new Date(issue.startTime),
-            escalatedAt: new Date(issue.escalatedAt)
-          }))
-          setEscalatedIssues(parsed)
-        }
-      } catch (err) {
-        console.error('Error updating escalated issues:', err)
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
-  }, [])
-
-  const [issueTypes, setIssueTypes] = useState<IssueType[]>([
-    {
-      id: '1',
-      name: t('issueTypes.noMaterials'),
-      color: 'bg-red-500',
-      icon: '📦',
-      category: t('categories.supply'),
-      slaMinutes: 30
-    },
-    {
-      id: '2',
-      name: t('issueTypes.machineFault'),
-      color: 'bg-orange-500',
-      icon: '⚙️',
-      category: t('categories.technical'),
-      slaMinutes: 60
-    },
-    {
-      id: '3',
-      name: t('issueTypes.conveyorStop'),
-      color: 'bg-yellow-500',
-      icon: '🔄',
-      category: t('categories.technical'),
-      slaMinutes: 45
-    },
-    {
-      id: '4',
-      name: t('issueTypes.safetyIssue'),
-      color: 'bg-red-600',
-      icon: '⚠️',
-      category: t('categories.safety'),
-      slaMinutes: 15
-    },
-    {
-      id: '5',
-      name: t('issueTypes.breakTime'),
-      color: 'bg-blue-500',
-      icon: '☕',
-      category: t('categories.personal'),
-      slaMinutes: 120
-    },
-    {
-      id: '6',
-      name: t('issueTypes.qualityIssue'),
-      color: 'bg-purple-500',
-      icon: '🔍',
-      category: t('categories.quality'),
-      slaMinutes: 90
-    }
-  ])
-
-  const [workplaces, setWorkplaces] = useState<Workplace[]>(
-    Array.from({ length: 20 }, (_, i) => ({
-      id: i + 1,
-      name: `${t('admin.station')} ${i + 1}`,
-      costPerHour: 150 + Math.random() * 100,
-      workerWage: 25 + Math.random() * 10,
-      status: 'active' as const
-    }))
+  const workplaces = useMemo<Workplace[]>(
+    () =>
+      Array.from({ length: 20 }, (_, i) => ({
+        id: i + 1,
+        name: `${t('admin.station')} ${i + 1}`,
+        costPerHour: 120 + ((i * 37) % 130),
+        status: i % 7 === 6 ? 'inactive' : 'active'
+      })),
+    [t]
   )
 
-  // Modal states
-  const [showAddIssueType, setShowAddIssueType] = useState(false)
-  const [showEditIssueType, setShowEditIssueType] = useState(false)
-  const [editingIssueType, setEditingIssueType] = useState<IssueType | null>(null)
-  const [newIssueType, setNewIssueType] = useState<Partial<IssueType>>({})
-
-  // Mock data for analytics
-  const mockIssues = [
-    { type: t('issueTypes.machineFault'), count: 15, duration: 45 },
-    { type: t('issueTypes.noMaterials'), count: 8, duration: 30 },
-    { type: t('issueTypes.conveyorStop'), count: 12, duration: 25 },
-    { type: t('issueTypes.safetyIssue'), count: 3, duration: 15 },
-    { type: t('issueTypes.breakTime'), count: 20, duration: 60 }
-  ]
-
-  const totalDowntime = mockIssues.reduce((acc, issue) => acc + (issue.count * issue.duration), 0)
-  const totalCost = totalDowntime * 2.5 // Mock cost calculation
-  const avgResolutionTime = totalDowntime / mockIssues.reduce((acc, issue) => acc + issue.count, 0)
-
-  const addIssueType = () => {
-    if (!newIssueType.name || !newIssueType.category) return
-
-    const issueType: IssueType = {
-      id: Date.now().toString(),
-      name: newIssueType.name,
-      color: newIssueType.color || 'bg-gray-500',
-      icon: newIssueType.icon || '📋',
-      category: newIssueType.category,
-      slaMinutes: newIssueType.slaMinutes || 60
+  const stats = useMemo(() => {
+    const active = issues.filter((i) => i.status === 'active').length
+    const escalated = issues.filter((i) => i.status === 'escalated').length
+    const resolved = issues.filter((i) => i.status === 'resolved').length
+    const totalDowntimeMs = issues
+      .filter((i) => i.status === 'resolved')
+      .reduce((acc, i) => acc + (i.duration ?? 0), 0)
+    const avgResolution =
+      resolved > 0 ? Math.round(totalDowntimeMs / resolved / 60000) : 0
+    const cost =
+      (totalDowntimeMs / (1000 * 60 * 60)) *
+      (workplaces.reduce((acc, w) => acc + w.costPerHour, 0) / workplaces.length)
+    return {
+      total: issues.length,
+      active,
+      escalated,
+      resolved,
+      totalDowntimeMs,
+      avgResolution,
+      cost
     }
+  }, [issues, workplaces])
 
-    setIssueTypes(prev => [...prev, issueType])
-    setNewIssueType({})
-    setShowAddIssueType(false)
-  }
+  const byCategory = useMemo(() => {
+    const counts = new Map<string, number>()
+    issues.forEach((i) => {
+      const key = i.typeId ?? i.type
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    })
+    const entries = Array.from(counts.entries()).map(([key, count]) => {
+      const def = DEFAULT_ISSUE_TYPES.find((d) => d.id === key)
+      return { key, label: def ? t(def.nameKey) : key, count, color: def?.color ?? 'from-slate-400 to-slate-600' }
+    })
+    entries.sort((a, b) => b.count - a.count)
+    return entries
+  }, [issues, t])
 
-  const updateIssueType = () => {
-    if (!editingIssueType) return
+  const byStation = useMemo(() => {
+    const counts = new Map<number, number>()
+    issues.forEach((i) => {
+      counts.set(i.workplace, (counts.get(i.workplace) ?? 0) + 1)
+    })
+    return workplaces.map((w) => ({ ...w, count: counts.get(w.id) ?? 0 }))
+  }, [issues, workplaces])
 
-    setIssueTypes(prev => prev.map(issue =>
-      issue.id === editingIssueType.id ? editingIssueType : issue
-    ))
-    setEditingIssueType(null)
-    setShowEditIssueType(false)
-  }
+  const escalated = useMemo(() => issues.filter((i) => i.status === 'escalated'), [issues])
 
-  const deleteIssueType = (id: string) => {
-    setIssueTypes(prev => prev.filter(issue => issue.id !== id))
-  }
+  const exportJson = useCallback(() => {
+    const blob = new Blob([JSON.stringify(issues, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `helpd-issues-${new Date().toISOString().slice(0, 19)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [issues])
 
-  const updateWorkplace = (id: number, updates: Partial<Workplace>) => {
-    setWorkplaces(prev => prev.map(workplace =>
-      workplace.id === id ? { ...workplace, ...updates } : workplace
-    ))
-  }
-
-  const categories = [
-    t('categories.technical'),
-    t('categories.supply'),
-    t('categories.safety'),
-    t('categories.quality'),
-    t('categories.personal')
+  const tabs = [
+    { id: 'overview' as const, icon: BarChart3, label: t('admin.overview') },
+    { id: 'issues' as const, icon: Settings, label: t('admin.issueManagement') },
+    { id: 'workplaces' as const, icon: MapPin, label: t('admin.workplaces') },
+    { id: 'escalated' as const, icon: AlertTriangle, label: t('admin.escalated') }
   ]
-
-  const formatDuration = (duration: number) => {
-    const minutes = Math.floor(duration / (1000 * 60))
-    const seconds = Math.floor((duration % (1000 * 60)) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <Link href={`/${params.locale}`} className="btn-secondary">
-              <Home className="w-5 h-5" />
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">{t('admin.title')}</h1>
-          </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+            {t('admin.title')}
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">{t('admin.subtitle')}</p>
         </div>
-
-        {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-white rounded-lg p-1 shadow-sm">
-          {([
-            { id: 'overview', icon: BarChart3, label: t('admin.overview') },
-            { id: 'issues', icon: Settings, label: t('admin.issueManagement') },
-            { id: 'workplaces', icon: MapPin, label: t('admin.workplaces') },
-            { id: 'escalated', icon: AlertTriangle, label: 'Escalated Issues' },
-            { id: 'settings', icon: Settings, label: t('admin.settings') }
-          ] as const).map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === id
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{label}</span>
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={exportJson}>
+            <Download className="h-4 w-4" /> {t('admin.export')}
+          </button>
+          <button className="btn-secondary" onClick={() => seedDemoIssues(true)}>
+            <RefreshCcw className="h-4 w-4" /> {t('admin.reseed')}
+          </button>
+          <button className="btn-ghost" onClick={resetIssues}>
+            <Trash2 className="h-4 w-4" /> {t('admin.clear')}
+          </button>
         </div>
-
-        {/* Tab Content */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">{t('admin.totalStations')}</p>
-                    <div className="text-2xl font-bold text-blue-600">{workplaces.length}</div>
-                  </div>
-                  <MapPin className="w-8 h-8 text-blue-500" />
-                </div>
-              </div>
-              
-              <div className="card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">{t('admin.issueTypes')}</p>
-                    <div className="text-2xl font-bold text-green-600">{issueTypes.length}</div>
-                  </div>
-                  <Settings className="w-8 h-8 text-green-500" />
-                </div>
-              </div>
-              
-              <div className="card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">{t('admin.issuesToday')}</p>
-                    <div className="text-2xl font-bold text-orange-600">
-                      {mockIssues.reduce((acc, issue) => acc + issue.count, 0)}
-                    </div>
-                  </div>
-                  <BarChart3 className="w-8 h-8 text-orange-500" />
-                </div>
-              </div>
-              
-              <div className="card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Escalated Issues</p>
-                    <div className="text-2xl font-bold text-red-600">{escalatedIssues.length}</div>
-                  </div>
-                  <AlertTriangle className="w-8 h-8 text-red-500" />
-                </div>
-              </div>
-            </div>
-
-            {/* Analytics Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="card">
-                <h3 className="text-lg font-semibold mb-4">{t('admin.issuesByCategory')}</h3>
-                <div className="space-y-3">
-                  {mockIssues.map((issue, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{issue.type}</span>
-                      <div className="flex items-center space-x-4">
-                        <span className="text-sm font-medium">{issue.count}</span>
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-500 h-2 rounded-full"
-                            style={{ width: `${(issue.count / Math.max(...mockIssues.map(i => i.count))) * 100}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="card">
-                <h3 className="text-lg font-semibold mb-4">{t('admin.costByStation')}</h3>
-                <div className="space-y-3">
-                  {workplaces.slice(0, 10).map((workplace) => (
-                    <div key={workplace.id} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{workplace.name}</span>
-                      <span className="text-sm font-medium">€{workplace.costPerHour.toFixed(0)}/h</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'issues' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">{t('admin.issueManagement')}</h2>
-              <button
-                onClick={() => setShowAddIssueType(true)}
-                className="btn-primary"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {t('admin.addIssueType')}
-              </button>
-            </div>
-
-            <div className="card">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.type')}</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.category')}</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.sla')}</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {issueTypes.map((issueType) => (
-                      <tr key={issueType.id} className="border-b border-gray-100">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-lg">{issueType.icon}</span>
-                            <span>{issueType.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">{issueType.category}</td>
-                        <td className="py-3 px-4 text-gray-600">{issueType.slaMinutes} min</td>
-                        <td className="py-3 px-4">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setEditingIssueType(issueType)
-                                setShowEditIssueType(true)
-                              }}
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => deleteIssueType(issueType.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'escalated' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Escalated Issues</h2>
-              <div className="text-sm text-gray-600">
-                {escalatedIssues.length} issue{escalatedIssues.length !== 1 ? 's' : ''} escalated
-              </div>
-            </div>
-
-            {escalatedIssues.length === 0 ? (
-              <div className="card text-center py-12">
-                <AlertTriangle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No Escalated Issues</h3>
-                <p className="text-gray-600">Issues escalated by FLS will appear here for admin review.</p>
-              </div>
-            ) : (
-              <div className="card">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Issue Type</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Station</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Started</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Escalated</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Duration</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Escalated By</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {escalatedIssues.map((issue) => (
-                        <tr key={issue.id} className="border-b border-gray-100">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-lg">⚠️</span>
-                              <span className="font-medium">{issue.type}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-gray-600">Station {issue.workplace}</td>
-                          <td className="py-3 px-4 text-gray-600">
-                            {issue.startTime.toLocaleTimeString()}
-                          </td>
-                          <td className="py-3 px-4 text-gray-600">
-                            {issue.escalatedAt.toLocaleTimeString()}
-                          </td>
-                          <td className="py-3 px-4 text-gray-600">
-                            {formatDuration(currentTime - issue.startTime.getTime())}
-                          </td>
-                          <td className="py-3 px-4 text-gray-600">{issue.escalatedBy}</td>
-                          <td className="py-3 px-4 text-gray-600">
-                            <div className="max-w-xs">
-                              {issue.notes && (
-                                <div className="mb-1">
-                                  <span className="text-xs text-gray-500">Worker:</span> {issue.notes}
-                                </div>
-                              )}
-                              {issue.flsNotes && (
-                                <div>
-                                  <span className="text-xs text-gray-500">FLS:</span> {issue.flsNotes}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'workplaces' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">{t('admin.workplaceConfiguration')}</h2>
-            <p className="text-sm text-gray-600">{t('admin.showingFirst20')}</p>
-
-            <div className="card">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.station')}</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.costPerHour')}</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.workerWage')}</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">{t('admin.status')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {workplaces.map((workplace) => (
-                      <tr key={workplace.id} className="border-b border-gray-100">
-                        <td className="py-3 px-4 font-medium">{workplace.name}</td>
-                        <td className="py-3 px-4">
-                          <input
-                            type="number"
-                            value={workplace.costPerHour}
-                            onChange={(e) => updateWorkplace(workplace.id, { costPerHour: parseFloat(e.target.value) })}
-                            className="w-20 p-1 border border-gray-300 rounded text-sm"
-                          />
-                        </td>
-                        <td className="py-3 px-4">
-                          <input
-                            type="number"
-                            value={workplace.workerWage}
-                            onChange={(e) => updateWorkplace(workplace.id, { workerWage: parseFloat(e.target.value) })}
-                            className="w-20 p-1 border border-gray-300 rounded text-sm"
-                          />
-                        </td>
-                        <td className="py-3 px-4">
-                          <select
-                            value={workplace.status}
-                            onChange={(e) => updateWorkplace(workplace.id, { status: e.target.value as 'active' | 'inactive' })}
-                            className="p-1 border border-gray-300 rounded text-sm"
-                          >
-                            <option value="active">{t('admin.active')}</option>
-                            <option value="inactive">{t('admin.inactive')}</option>
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">{t('admin.systemSettings')}</h2>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="card">
-                <h3 className="text-lg font-semibold mb-4">{t('admin.generalSettings')}</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.defaultSla')}
-                    </label>
-                    <input
-                      type="number"
-                      defaultValue={60}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.offlineWarning')}
-                    </label>
-                    <input
-                      type="number"
-                      defaultValue={10}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.dataRetention')}
-                    </label>
-                    <input
-                      type="number"
-                      defaultValue={30}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="card">
-                <h3 className="text-lg font-semibold mb-4">{t('admin.costConfiguration')}</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.defaultCostPerHour')}
-                    </label>
-                    <input
-                      type="number"
-                      defaultValue={150}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.defaultWorkerWage')}
-                    </label>
-                    <input
-                      type="number"
-                      defaultValue={25}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.overheadPercentage')}
-                    </label>
-                    <input
-                      type="number"
-                      defaultValue={15}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex space-x-3">
-              <button className="btn-secondary">
-                {t('admin.resetToDefaults')}
-              </button>
-              <button className="btn-primary">
-                {t('admin.saveSettings')}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Add Issue Type Modal */}
-      {showAddIssueType && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">{t('admin.addNewIssueType')}</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.name')}</label>
-                <input
-                  type="text"
-                  value={newIssueType.name || ''}
-                  onChange={(e) => setNewIssueType(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder={t('admin.namePlaceholder')}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
+      <div className="flex overflow-x-auto gap-1 bg-white p-1 rounded-2xl border border-slate-200 mb-6 shadow-sm">
+        {tabs.map(({ id, icon: Icon, label }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
+              tab === id
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'overview' && (
+        <div className="space-y-6 animate-fade-in-up">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <KPI
+              tone="blue"
+              icon={Activity}
+              label={t('admin.activeIssues')}
+              value={stats.active}
+            />
+            <KPI
+              tone="amber"
+              icon={AlertTriangle}
+              label={t('admin.escalated')}
+              value={stats.escalated}
+            />
+            <KPI
+              tone="green"
+              icon={Clock}
+              label={t('admin.avgResolution')}
+              value={`${stats.avgResolution}m`}
+            />
+            <KPI
+              tone="slate"
+              icon={BarChart3}
+              label={t('admin.totalIssues')}
+              value={stats.total}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="section-title">{t('admin.issuesByCategory')}</h3>
+                <span className="text-xs text-slate-500">{issues.length} {t('admin.total')}</span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.category')}</label>
-                <select
-                  value={newIssueType.category || ''}
-                  onChange={(e) => setNewIssueType(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="">{t('admin.selectCategory')}</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.slaMinutes')}</label>
-                <input
-                  type="number"
-                  value={newIssueType.slaMinutes || ''}
-                  onChange={(e) => setNewIssueType(prev => ({ ...prev, slaMinutes: parseInt(e.target.value) }))}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.icon')}</label>
-                <input
-                  type="text"
-                  value={newIssueType.icon || ''}
-                  onChange={(e) => setNewIssueType(prev => ({ ...prev, icon: e.target.value }))}
-                  placeholder={t('admin.iconPlaceholder')}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
+              {byCategory.length === 0 ? (
+                <EmptyState t={t} />
+              ) : (
+                <ul className="space-y-3">
+                  {byCategory.map((row) => {
+                    const max = Math.max(...byCategory.map((c) => c.count), 1)
+                    const pct = (row.count / max) * 100
+                    return (
+                      <li key={row.key}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-700">{row.label}</span>
+                          <span className="text-slate-500">{row.count}</span>
+                        </div>
+                        <div className="mt-1.5 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${row.color}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={() => setShowAddIssueType(false)}
-                className="btn-secondary flex-1"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={addIssueType}
-                className="btn-primary flex-1"
-              >
-                {t('common.add')}
-              </button>
+
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="section-title">{t('admin.issuesByStation')}</h3>
+                <span className="text-xs text-slate-500">
+                  {t('admin.top10')}
+                </span>
+              </div>
+              {byStation.every((s) => s.count === 0) ? (
+                <EmptyState t={t} />
+              ) : (
+                <ul className="space-y-2">
+                  {byStation
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 10)
+                    .map((s) => {
+                      const max = Math.max(...byStation.map((c) => c.count), 1)
+                      const pct = (s.count / max) * 100
+                      return (
+                        <li key={s.id}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-700">{s.name}</span>
+                            <span className="text-slate-500">{s.count}</span>
+                          </div>
+                          <div className="mt-1.5 h-2 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </li>
+                      )
+                    })}
+                </ul>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Issue Type Modal */}
-      {showEditIssueType && editingIssueType && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">{t('admin.editIssueType')}</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.name')}</label>
-                <input
-                  type="text"
-                  value={editingIssueType.name}
-                  onChange={(e) => setEditingIssueType(prev => prev ? { ...prev, name: e.target.value } : null)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.category')}</label>
-                <select
-                  value={editingIssueType.category}
-                  onChange={(e) => setEditingIssueType(prev => prev ? { ...prev, category: e.target.value } : null)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                >
-                  {categories.map((category) => (
-                    <option key={category} value={category}>{category}</option>
+      {tab === 'issues' && (
+        <div className="card animate-fade-in-up">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="section-title">{t('admin.issueManagement')}</h2>
+            <span className="text-xs text-slate-500">
+              {issues.length} {t('admin.total')}
+            </span>
+          </div>
+          {issues.length === 0 ? (
+            <EmptyState t={t} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
+                    <th className="py-2 pr-4">{t('admin.type')}</th>
+                    <th className="py-2 pr-4">{t('admin.station')}</th>
+                    <th className="py-2 pr-4">{t('admin.started')}</th>
+                    <th className="py-2 pr-4">{t('admin.duration')}</th>
+                    <th className="py-2">{t('admin.status')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {issues.map((issue) => (
+                    <tr key={issue.id}>
+                      <td className="py-3 pr-4">{issue.type}</td>
+                      <td className="py-3 pr-4 text-slate-600">{issue.workplace}</td>
+                      <td className="py-3 pr-4 text-slate-600">
+                        {new Date(issue.startTime).toLocaleTimeString()}
+                      </td>
+                      <td className="py-3 pr-4 tabular-nums">
+                        {issue.duration
+                          ? formatDuration(issue.duration)
+                          : formatDuration(now - new Date(issue.startTime).getTime())}
+                      </td>
+                      <td className="py-3">
+                        <StatusPill status={issue.status} />
+                      </td>
+                    </tr>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.slaMinutes')}</label>
-                <input
-                  type="number"
-                  value={editingIssueType.slaMinutes}
-                  onChange={(e) => setEditingIssueType(prev => prev ? { ...prev, slaMinutes: parseInt(e.target.value) } : null)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
+                </tbody>
+              </table>
             </div>
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={() => setShowEditIssueType(false)}
-                className="btn-secondary flex-1"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={updateIssueType}
-                className="btn-primary flex-1"
-              >
-                {t('admin.updateIssueType')}
-              </button>
-            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'workplaces' && (
+        <div className="card animate-fade-in-up">
+          <h2 className="section-title mb-4">{t('admin.workplaceConfiguration')}</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="py-2 pr-4">{t('admin.station')}</th>
+                  <th className="py-2 pr-4">{t('admin.costPerHour')}</th>
+                  <th className="py-2 pr-4">{t('admin.issuesReported')}</th>
+                  <th className="py-2">{t('admin.status')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {byStation.map((w) => (
+                  <tr key={w.id}>
+                    <td className="py-3 pr-4 font-medium">{w.name}</td>
+                    <td className="py-3 pr-4 text-slate-600">€{w.costPerHour.toFixed(0)}/h</td>
+                    <td className="py-3 pr-4 text-slate-600">{w.count}</td>
+                    <td className="py-3">
+                      <span className={w.status === 'active' ? 'pill-green' : 'pill-slate'}>
+                        {t(w.status === 'active' ? 'admin.active' : 'admin.inactive')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
+
+      {tab === 'escalated' && (
+        <div className="card animate-fade-in-up">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="section-title">{t('admin.escalated')}</h2>
+            <span className="text-xs text-slate-500">
+              {escalated.length} {t('admin.total')}
+            </span>
+          </div>
+          {escalated.length === 0 ? (
+            <EmptyState t={t} icon={AlertTriangle} />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {escalated.map((issue) => (
+                <li key={issue.id} className="py-3 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-medium text-slate-900">{issue.type}</div>
+                    <div className="text-xs text-slate-500">
+                      {t('worker.station')} {issue.workplace} ·{' '}
+                      {new Date(issue.startTime).toLocaleTimeString()}
+                    </div>
+                    {issue.notes && (
+                      <div className="text-xs text-slate-500 mt-1">
+                        <span className="text-slate-400">{t('fls.workerNotes')}:</span>{' '}
+                        {issue.notes}
+                      </div>
+                    )}
+                    {issue.flsNotes && (
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        <span className="text-slate-400">{t('fls.flsNotes')}:</span>{' '}
+                        {issue.flsNotes}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right text-xs text-slate-500 whitespace-nowrap">
+                    <StatusPill status={issue.status} />
+                    <div className="mt-1 tabular-nums">
+                      {formatDuration(now - new Date(issue.startTime).getTime())}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KPI({
+  tone,
+  icon: Icon,
+  label,
+  value
+}: {
+  tone: 'blue' | 'amber' | 'green' | 'slate'
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: number | string
+}) {
+  const toneMap = {
+    blue: 'bg-brand-50 text-brand-700',
+    amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    slate: 'bg-slate-100 text-slate-700'
+  }[tone]
+  return (
+    <div className="stat-card">
+      <div>
+        <div className="text-xs text-slate-500">{label}</div>
+        <div className="text-2xl font-semibold text-slate-900 mt-0.5">{value}</div>
+      </div>
+      <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${toneMap}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+    </div>
+  )
+}
+
+function StatusPill({ status }: { status: Issue['status'] }) {
+  const t = useTranslations()
+  const cls =
+    status === 'active'
+      ? 'pill-blue'
+      : status === 'resolved'
+      ? 'pill-green'
+      : 'pill-amber'
+  return <span className={cls}>{t(`status.${status}`)}</span>
+}
+
+function EmptyState({
+  t,
+  icon: Icon = BarChart3
+}: {
+  t: (key: string) => string
+  icon?: React.ComponentType<{ className?: string }>
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <Icon className="h-10 w-10 text-slate-300" />
+      <div className="mt-2 text-sm text-slate-500">{t('admin.noData')}</div>
+      <div className="mt-0.5 text-xs text-slate-400">{t('admin.noDataHint')}</div>
     </div>
   )
 }

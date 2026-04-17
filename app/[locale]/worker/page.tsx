@@ -1,430 +1,360 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Home, AlertTriangle, Clock, MapPin, MessageSquare } from 'lucide-react'
-import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  Clock,
+  MapPin,
+  MessageSquare,
+  HelpCircle,
+  StopCircle,
+  Wifi,
+  WifiOff,
+  Loader2
+} from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useParams } from 'next/navigation'
-
-interface Issue {
-  id: string
-  type: string
-  startTime: Date
-  endTime?: Date
-  duration?: number
-  notes?: string
-  workplace: number
-  status: 'active' | 'resolved' | 'escalated'
-}
-
-interface IssueType {
-  id: string
-  name: string
-  color: string
-  icon: string
-}
+import {
+  DEFAULT_ISSUE_TYPES,
+  Issue,
+  WORKPLACE_KEY,
+  formatDuration,
+  loadIssues,
+  saveIssues,
+  subscribeIssues,
+  updateIssue
+} from '@/lib/issues'
 
 export default function WorkerPage() {
   const t = useTranslations()
-  const params = useParams()
+
   const [workplace, setWorkplace] = useState<number>(1)
-  const [activeIssue, setActiveIssue] = useState<Issue | null>(null)
-  const [issueHistory, setIssueHistory] = useState<Issue[]>([])
+  const [issues, setIssues] = useState<Issue[]>([])
   const [showWorkplaceModal, setShowWorkplaceModal] = useState(false)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [notes, setNotes] = useState('')
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'unstable' | 'offline'>('connected')
+  const [connection, setConnection] = useState<'connected' | 'unstable' | 'offline'>('connected')
   const [error, setError] = useState<string | null>(null)
-  const [currentTime, setCurrentTime] = useState(Date.now())
+  const [now, setNow] = useState(Date.now())
 
-  // Update current time every second for real-time timer display
+  const issueTypes = useMemo(
+    () => DEFAULT_ISSUE_TYPES.map((i) => ({ ...i, name: t(i.nameKey) })),
+    [t]
+  )
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-
-    return () => clearInterval(timer)
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
   }, [])
 
-  // Memoize issue types to prevent unnecessary re-renders
-  const issueTypes: IssueType[] = useMemo(() => [
-    { id: 'no-materials', name: t('issueTypes.noMaterials'), color: 'bg-red-500', icon: '📦' },
-    { id: 'machine-fault', name: t('issueTypes.machineFault'), color: 'bg-orange-500', icon: '⚙️' },
-    { id: 'conveyor-stop', name: t('issueTypes.conveyorStop'), color: 'bg-yellow-500', icon: '🔄' },
-    { id: 'safety-issue', name: t('issueTypes.safetyIssue'), color: 'bg-red-600', icon: '⚠️' },
-    { id: 'break-time', name: t('issueTypes.breakTime'), color: 'bg-blue-500', icon: '☕' },
-    { id: 'quality-issue', name: t('issueTypes.qualityIssue'), color: 'bg-purple-500', icon: '🔍' }
-  ], [t])
-
-  // Simulate connection status changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const statuses: Array<'connected' | 'unstable' | 'offline'> = ['connected', 'unstable', 'offline']
-      const randomStatus = statuses[Math.floor(Math.random() * statuses.length)]
-      setConnectionStatus(randomStatus)
-    }, 10000) // Change every 10 seconds for demo
-
-    return () => clearInterval(interval)
-  }, [])
-
-  // Load data from localStorage on mount
   useEffect(() => {
     try {
-      const savedWorkplace = localStorage.getItem('helpd-workplace')
-      const savedIssues = localStorage.getItem('helpd-issue-history')
-      
-      if (savedWorkplace) {
-        setWorkplace(parseInt(savedWorkplace))
-      }
-      
-      if (savedIssues) {
-        const parsedIssues = JSON.parse(savedIssues).map((issue: any) => ({
-          ...issue,
-          startTime: new Date(issue.startTime),
-          endTime: issue.endTime ? new Date(issue.endTime) : undefined
-        }))
-        setIssueHistory(parsedIssues)
-        
-        // Restore active issue if it exists
-        const activeIssue = parsedIssues.find((issue: Issue) => issue.status === 'active')
-        if (activeIssue) {
-          setActiveIssue(activeIssue)
-        }
-      }
-    } catch (err) {
-      console.error('Error loading saved data:', err)
-      setError('Failed to load saved data')
-    }
+      const saved = localStorage.getItem(WORKPLACE_KEY)
+      if (saved) setWorkplace(parseInt(saved))
+    } catch {}
+    setIssues(loadIssues())
+    return subscribeIssues(() => setIssues(loadIssues()))
   }, [])
 
-  // Save data to localStorage when it changes
   useEffect(() => {
     try {
-      localStorage.setItem('helpd-workplace', workplace.toString())
-    } catch (err) {
-      console.error('Error saving workplace:', err)
-    }
+      localStorage.setItem(WORKPLACE_KEY, workplace.toString())
+    } catch {}
   }, [workplace])
 
+  // Simulated connection status for presentation realism.
   useEffect(() => {
-    try {
-      localStorage.setItem('helpd-issue-history', JSON.stringify(issueHistory))
-    } catch (err) {
-      console.error('Error saving issue history:', err)
-    }
-  }, [issueHistory])
+    const id = setInterval(() => {
+      const roll = Math.random()
+      setConnection(roll < 0.85 ? 'connected' : roll < 0.95 ? 'unstable' : 'offline')
+    }, 12000)
+    return () => clearInterval(id)
+  }, [])
 
-  const startIssue = useCallback((issueType: IssueType) => {
-    if (activeIssue) {
-      setError('You already have an active issue. Please stop the current timer first.')
-      return
-    }
+  const activeIssue = useMemo(
+    () => issues.find((i) => i.status === 'active' && i.workplace === workplace) ?? null,
+    [issues, workplace]
+  )
 
-    const newIssue: Issue = {
-      id: Date.now().toString(),
-      type: issueType.name,
-      startTime: new Date(),
-      workplace,
-      status: 'active'
-    }
+  const recentAtStation = useMemo(
+    () => issues.filter((i) => i.workplace === workplace).slice(0, 6),
+    [issues, workplace]
+  )
 
-    setActiveIssue(newIssue)
-    setIssueHistory(prev => [newIssue, ...prev])
-    setError(null)
-  }, [activeIssue, workplace])
+  const startIssue = useCallback(
+    (typeDef: (typeof issueTypes)[number]) => {
+      if (activeIssue) {
+        setError(t('worker.alreadyActive'))
+        return
+      }
+      const newIssue: Issue = {
+        id: Date.now().toString(),
+        type: typeDef.name,
+        typeId: typeDef.id,
+        category: typeDef.category,
+        startTime: new Date().toISOString(),
+        workplace,
+        status: 'active'
+      }
+      saveIssues([newIssue, ...issues])
+      setError(null)
+    },
+    [activeIssue, issues, t, workplace]
+  )
 
   const stopIssue = useCallback(() => {
     if (!activeIssue) return
-
-    const updatedIssue: Issue = {
-      ...activeIssue,
-      endTime: new Date(),
-      duration: Date.now() - activeIssue.startTime.getTime(),
-      status: 'resolved'
-    }
-
-    setIssueHistory(prev => prev.map(issue => 
-      issue.id === activeIssue.id ? updatedIssue : issue
-    ))
-    setActiveIssue(null)
+    updateIssue(activeIssue.id, {
+      status: 'resolved',
+      endTime: new Date().toISOString(),
+      duration: Date.now() - new Date(activeIssue.startTime).getTime()
+    })
     setError(null)
   }, [activeIssue])
 
   const requestHelp = useCallback(() => {
     if (!activeIssue) {
-      setError('No active issue to request help for')
+      setError(t('worker.noActiveIssue'))
       return
     }
-    
-    // Simulate help request
-    alert('Help request sent to FLS!')
-    setError(null)
-  }, [activeIssue])
+    updateIssue(activeIssue.id, { status: 'escalated', escalatedBy: t('worker.title'), escalatedAt: new Date().toISOString() })
+  }, [activeIssue, t])
 
-  const addNotes = useCallback(() => {
+  const saveNotes = useCallback(() => {
     if (!activeIssue || !notes.trim()) {
-      setError('Please enter some notes before saving')
+      setError(t('worker.emptyNotes'))
       return
     }
-
-    const updatedIssue: Issue = {
-      ...activeIssue,
-      notes: notes
-    }
-
-    setActiveIssue(updatedIssue)
-    setIssueHistory(prev => prev.map(issue => 
-      issue.id === activeIssue.id ? updatedIssue : issue
-    ))
+    updateIssue(activeIssue.id, { notes })
     setNotes('')
     setShowNotesModal(false)
-    setError(null)
-  }, [activeIssue, notes])
+  }, [activeIssue, notes, t])
 
-  const formatDuration = useCallback((duration: number) => {
-    const minutes = Math.floor(duration / (1000 * 60))
-    const seconds = Math.floor((duration % (1000 * 60)) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }, [])
-
-  const getStatusColor = useCallback((status: string) => {
-    switch (status) {
-      case 'connected': return 'status-green'
-      case 'unstable': return 'status-yellow'
-      case 'offline': return 'status-red'
-      default: return 'status-green'
-    }
-  }, [])
-
-  const clearError = useCallback(() => {
-    setError(null)
-  }, [])
-
-  // Auto-clear error after 5 seconds
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(clearError, 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [error, clearError])
+    if (!error) return
+    const id = setTimeout(() => setError(null), 4000)
+    return () => clearTimeout(id)
+  }, [error])
+
+  const connectionPill =
+    connection === 'connected'
+      ? { cls: 'pill-green', icon: Wifi }
+      : connection === 'unstable'
+      ? { cls: 'pill-amber', icon: Loader2 }
+      : { cls: 'pill-red', icon: WifiOff }
+  const ConnIcon = connectionPill.icon
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      {/* Error Banner */}
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
       {error && (
-        <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-3 text-center z-50">
-          <div className="flex items-center justify-center space-x-2">
-            <AlertTriangle className="w-4 h-4" />
-            <span>{error}</span>
-            <button 
-              onClick={clearError}
-              className="ml-2 text-white hover:text-red-100"
-              aria-label="Dismiss error"
-            >
-              ✕
-            </button>
-          </div>
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-800 p-3 flex items-center gap-2 animate-fade-in-up">
+          <AlertTriangle className="h-4 w-4" />
+          <span className="text-sm">{error}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <Link href={`/${params.locale}`} className="btn-secondary" aria-label="Go to home page">
-              <Home className="w-5 h-5" />
-            </Link>
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+            {t('worker.title')}
+          </h1>
+          <div className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+            <MapPin className="h-4 w-4" />
+            <span>
+              {t('worker.station')} {workplace}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowWorkplaceModal(true)}
+              className="text-brand-700 hover:text-brand-800 underline underline-offset-2"
+            >
+              {t('worker.selectWorkplace')}
+            </button>
+          </div>
+        </div>
+        <span className={connectionPill.cls}>
+          <ConnIcon className="h-3.5 w-3.5" /> {t(`worker.connectionStatus.${connection}`)}
+        </span>
+      </div>
+
+      {activeIssue && (
+        <div className="card mb-6 border-amber-200 bg-gradient-to-br from-amber-50 to-white animate-fade-in-up">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{t('worker.title')}</h1>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <MapPin className="w-4 h-4" />
-                <span>{t('worker.station')} {workplace}</span>
-                <button
-                  onClick={() => setShowWorkplaceModal(true)}
-                  className="text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                >
-                  {t('worker.selectWorkplace')}
+              <span className="pill-amber">
+                <AlertTriangle className="h-3.5 w-3.5" /> {t('worker.activeIssue')}
+              </span>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{activeIssue.type}</div>
+              <div className="text-sm text-slate-600">
+                {t('worker.startedAt')}{' '}
+                {new Date(activeIssue.startTime).toLocaleTimeString()}
+              </div>
+            </div>
+            <div className="flex flex-col items-start md:items-end gap-3">
+              <div className="inline-flex items-center gap-2 text-3xl font-semibold tracking-tight text-amber-900">
+                <Clock className="h-6 w-6" />
+                {formatDuration(now - new Date(activeIssue.startTime).getTime())}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-secondary" onClick={() => setShowNotesModal(true)}>
+                  <MessageSquare className="h-4 w-4" /> {t('worker.addNotes')}
+                </button>
+                <button className="btn-primary" onClick={requestHelp}>
+                  <HelpCircle className="h-4 w-4" /> {t('worker.requestHelp')}
+                </button>
+                <button className="btn-danger" onClick={stopIssue}>
+                  <StopCircle className="h-4 w-4" /> {t('worker.stopTimer')}
                 </button>
               </div>
             </div>
           </div>
-          
-          {/* Connection Status */}
-          <div className="flex items-center space-x-2">
-            <div className={`status-indicator ${getStatusColor(connectionStatus)}`}></div>
-            <span className="text-sm text-gray-600">
-              {t(`worker.connectionStatus.${connectionStatus}`)}
-            </span>
-          </div>
-        </div>
-
-        {/* Active Issue Display */}
-        {activeIssue && (
-          <div className="card mb-6 bg-yellow-50 border-yellow-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-800">{t('worker.activeIssue')}</h3>
-                <p className="text-yellow-700">{activeIssue.type}</p>
-                <p className="text-sm text-yellow-600">
-                  {t('worker.startedAt')} {activeIssue.startTime.toLocaleTimeString()}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-yellow-800">
-                  <Clock className="w-6 h-6 inline mr-2" />
-                  {formatDuration(currentTime - activeIssue.startTime.getTime())}
-                </div>
-                <div className="flex space-x-2 mt-2">
-                  <button
-                    onClick={() => setShowNotesModal(true)}
-                    className="btn-secondary text-sm"
-                    aria-label="Add notes to current issue"
-                  >
-                    <MessageSquare className="w-4 h-4 mr-1" />
-                    {t('worker.addNotes')}
-                  </button>
-                  <button
-                    onClick={requestHelp}
-                    className="btn-primary text-sm"
-                    aria-label="Request help from FLS"
-                  >
-                    <AlertTriangle className="w-4 h-4 mr-1" />
-                    {t('worker.requestHelp')}
-                  </button>
-                  <button
-                    onClick={stopIssue}
-                    className="btn-danger text-sm"
-                    aria-label="Stop current timer"
-                  >
-                    {t('worker.stopTimer')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Issue Buttons */}
-        <div className="card mb-6">
-          <h2 className="text-xl font-semibold mb-4">{t('worker.reportIssue')}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {issueTypes.map((issueType) => (
-              <button
-                key={issueType.id}
-                onClick={() => startIssue(issueType)}
-                disabled={!!activeIssue}
-                className={`${issueType.color} text-white p-4 rounded-lg text-center transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-                aria-label={`Report ${issueType.name} issue`}
-              >
-                <div className="text-2xl mb-2" role="img" aria-hidden="true">{issueType.icon}</div>
-                <div className="font-medium">{issueType.name}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Issues */}
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">{t('worker.recentIssues')}</h2>
-          {issueHistory.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">{t('worker.noIssues')}</p>
-          ) : (
-            <div className="space-y-3">
-              {issueHistory.slice(0, 5).map((issue) => (
-                <div key={issue.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium">{issue.type}</p>
-                    <p className="text-sm text-gray-600">
-                      {issue.startTime.toLocaleTimeString()} - {issue.workplace}
-                    </p>
-                    {issue.notes && (
-                      <p className="text-sm text-gray-500 mt-1">{issue.notes}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      issue.status === 'active' ? 'bg-yellow-100 text-yellow-800' :
-                      issue.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {t(`status.${issue.status}`)}
-                    </span>
-                    {issue.duration && (
-                      <p className="text-sm text-gray-600 mt-1">
-                        {formatDuration(issue.duration)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
+          {activeIssue.notes && (
+            <div className="mt-4 rounded-xl bg-white border border-amber-100 p-3 text-sm text-slate-700">
+              <span className="text-xs uppercase tracking-wider text-amber-700 mr-2">
+                {t('worker.notes')}
+              </span>
+              {activeIssue.notes}
             </div>
           )}
         </div>
+      )}
+
+      <div className="card mb-6">
+        <h2 className="section-title mb-4">{t('worker.reportIssue')}</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {issueTypes.map((issueType) => (
+            <button
+              key={issueType.id}
+              onClick={() => startIssue(issueType)}
+              disabled={!!activeIssue}
+              className={`relative overflow-hidden rounded-2xl p-5 text-white text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-br ${issueType.color} shadow-pop`}
+              aria-label={`Report ${issueType.name}`}
+            >
+              <div className="text-3xl" aria-hidden="true">{issueType.icon}</div>
+              <div className="mt-3 font-semibold">{issueType.name}</div>
+              <div className="mt-0.5 text-xs opacity-80">
+                {t('worker.slaTag', { min: issueType.slaMinutes })}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Workplace Selection Modal */}
-      {showWorkplaceModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">{t('worker.selectWorkplace')}</h3>
-            <div className="grid grid-cols-5 gap-2 mb-4 max-h-60 overflow-y-auto">
-              {Array.from({ length: 100 }, (_, i) => i + 1).map((station) => (
-                <button
-                  key={station}
-                  onClick={() => {
-                    setWorkplace(station)
-                    setShowWorkplaceModal(false)
-                  }}
-                  className={`p-2 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    workplace === station
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  }`}
-                  aria-label={`Select station ${station}`}
-                >
-                  {station}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowWorkplaceModal(false)}
-              className="btn-secondary w-full"
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="section-title">{t('worker.recentIssues')}</h2>
+          <span className="text-xs text-slate-500">
+            {t('worker.atStation', { n: workplace })}
+          </span>
         </div>
+        {recentAtStation.length === 0 ? (
+          <p className="text-sm text-slate-500 py-6 text-center">{t('worker.noIssues')}</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {recentAtStation.map((issue) => (
+              <li key={issue.id} className="flex items-center justify-between py-3 gap-4">
+                <div>
+                  <div className="font-medium text-slate-900">{issue.type}</div>
+                  <div className="text-xs text-slate-500">
+                    {new Date(issue.startTime).toLocaleTimeString()}
+                  </div>
+                  {issue.notes && <div className="text-xs text-slate-500 mt-0.5">{issue.notes}</div>}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <StatusPill status={issue.status} />
+                  {issue.duration && (
+                    <span className="text-xs text-slate-500">
+                      {formatDuration(issue.duration)}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {showWorkplaceModal && (
+        <Modal onClose={() => setShowWorkplaceModal(false)} title={t('worker.selectWorkplace')}>
+          <div className="grid grid-cols-5 gap-2 max-h-72 overflow-y-auto">
+            {Array.from({ length: 100 }, (_, i) => i + 1).map((station) => (
+              <button
+                key={station}
+                onClick={() => {
+                  setWorkplace(station)
+                  setShowWorkplaceModal(false)
+                }}
+                className={`p-2 rounded-lg text-sm border transition-colors ${
+                  workplace === station
+                    ? 'bg-brand-600 text-white border-brand-600'
+                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {station}
+              </button>
+            ))}
+          </div>
+        </Modal>
       )}
 
-      {/* Notes Modal */}
       {showNotesModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">{t('worker.notes')}</h3>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={t('worker.describeIssue')}
-              className="w-full p-3 border border-gray-300 rounded-lg resize-none h-32 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              aria-label="Issue description"
-            />
-            <div className="flex space-x-3 mt-4">
-              <button
-                onClick={() => setShowNotesModal(false)}
-                className="btn-secondary flex-1"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={addNotes}
-                className="btn-primary flex-1"
-              >
-                {t('worker.saveNotes')}
-              </button>
-            </div>
+        <Modal onClose={() => setShowNotesModal(false)} title={t('worker.notes')}>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={t('worker.describeIssue')}
+            className="input h-32 resize-none"
+          />
+          <div className="flex gap-2 mt-4">
+            <button className="btn-secondary flex-1" onClick={() => setShowNotesModal(false)}>
+              {t('common.cancel')}
+            </button>
+            <button className="btn-primary flex-1" onClick={saveNotes}>
+              {t('worker.saveNotes')}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
+    </div>
+  )
+}
+
+function StatusPill({ status }: { status: Issue['status'] }) {
+  const t = useTranslations()
+  const cls =
+    status === 'active'
+      ? 'pill-amber'
+      : status === 'resolved'
+      ? 'pill-green'
+      : 'pill-red'
+  return <span className={cls}>{t(`status.${status}`)}</span>
+}
+
+function Modal({
+  children,
+  title,
+  onClose
+}: {
+  children: React.ReactNode
+  title: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+  return (
+    <div
+      className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in-up"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full max-w-md rounded-2xl shadow-pop p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="section-title mb-4">{title}</h3>
+        {children}
+      </div>
     </div>
   )
 }
