@@ -64,9 +64,21 @@ jobs:
       run: npm run build
     
     - name: Deploy to Vercel
+      # Skip rather than fail when the Vercel secrets are not configured.
+      # Vercel's own GitHub integration already deploys every push to main
+      # (see the "vercel[bot]" comment on the PR), so this step is a redundant
+      # belt-and-braces deploy. Without this guard it hard-fails with
+      # "Input required and not supplied: vercel-token" and marks the whole
+      # run red on every push — a false failure that hides real breakage.
+      if: ${{ secrets.VERCEL_TOKEN != '' && secrets.ORG_ID != '' && secrets.PROJECT_ID != '' }}
       uses: amondnet/vercel-action@v25
       with:
         vercel-token: ${{ secrets.VERCEL_TOKEN }}
         vercel-org-id: ${{ secrets.ORG_ID }}
         vercel-project-id: ${{ secrets.PROJECT_ID }}
         vercel-args: '--prod'
+
+    - name: Note skipped Vercel deploy
+      if: ${{ secrets.VERCEL_TOKEN == '' || secrets.ORG_ID == '' || secrets.PROJECT_ID == '' }}
+      run: |
+        echo "::notice title=Vercel deploy skipped::VERCEL_TOKEN / ORG_ID / PROJECT_ID are not set, so the CLI deploy step was skipped. Vercel's GitHub integration still deploys main automatically. To enable this step, add the three repository secrets."
