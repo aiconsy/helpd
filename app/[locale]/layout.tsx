@@ -4,13 +4,15 @@ import LanguageSwitcher from '@/components/LanguageSwitcher'
 
 interface LocaleLayoutProps {
   children: React.ReactNode
-  params: { locale: string }
+  // Next.js 15: dynamic route params are async (a Promise to be awaited).
+  params: Promise<{ locale: string }>
 }
 
 export default async function LocaleLayout({
   children,
-  params: { locale }
+  params
 }: LocaleLayoutProps) {
+  const { locale } = await params
   const messages = await getMessages()
 
   return (

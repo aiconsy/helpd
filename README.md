@@ -1,6 +1,7 @@
 # HelpD Logistics Support App
+**Built with: deepseek-v4.1-flash via Hermes Agent on September 14, 2026**
 
-A modern, multilingual logistics support application designed for factory workers, FLS (First Line Support), and administrators. Built with Next.js 14, TypeScript, and Tailwind CSS.
+A modern, multilingual logistics support application designed for factory workers, FLS (First Line Support), and administrators. Built with Next.js 15, React 19, TypeScript, and Tailwind CSS.
 
 ## 🚀 Features
 
@@ -13,7 +14,7 @@ A modern, multilingual logistics support application designed for factory worker
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 14, React 18, TypeScript
+- **Frontend**: Next.js 15, React 19, TypeScript
 - **Styling**: Tailwind CSS
 - **Internationalization**: next-intl
 - **PWA**: next-pwa

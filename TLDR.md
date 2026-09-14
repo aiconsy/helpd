@@ -21,7 +21,7 @@ HelpD is a **real-time logistics factory support app** that helps workers report
 3. **Admin** views escalated issues, configures system, monitors performance
 
 ## 🚀 **Ready for Deployment**
-- **Built with** Next.js 14, React 18, TypeScript, Tailwind CSS
+- **Built with** Next.js 15, React 19, TypeScript, Tailwind CSS
 - **No backend needed** for testing (uses localStorage)
 - **Easy to deploy** to subdomain, Vercel, or any web server
 - **Production ready** with proper error handling and optimizations

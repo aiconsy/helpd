@@ -16,7 +16,9 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        # Node 18 reached end-of-life on 2025-04-30. Next.js 15 requires >=18.18;
+        # Node 22 is the current LTS and matches local verification.
+        node-version: '22'
         cache: 'npm'
     
     - name: Install dependencies
@@ -51,7 +53,8 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        # Node 18 is EOL (2025-04-30) — keep in lockstep with the test job.
+        node-version: '22'
         cache: 'npm'
     
     - name: Install dependencies

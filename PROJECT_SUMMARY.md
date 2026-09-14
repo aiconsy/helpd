@@ -4,7 +4,7 @@
 HelpD is a multilingual logistics support application designed for factory workers, FLS (First Line Support), and administrators. The app provides real-time issue tracking, escalation management, and administrative oversight.
 
 ## 🏗️ **Architecture**
-- **Frontend**: Next.js 14 with App Router
+- **Frontend**: Next.js 15 with App Router
 - **Styling**: Tailwind CSS
 - **State Management**: React hooks + localStorage
 - **Internationalization**: next-intl (4 languages)
