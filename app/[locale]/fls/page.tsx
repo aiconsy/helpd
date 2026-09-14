@@ -189,11 +189,19 @@ export default function FLSPage() {
     }
 
     try {
+      const noteText = flsNotes
       setIssues(prev => prev.map(issue =>
         issue.id === selectedIssue.id
-          ? { ...issue, flsNotes: flsNotes }
+          ? { ...issue, flsNotes: noteText }
           : issue
       ))
+      // selectedIssue is a snapshot of the issue taken when the modal opened.
+      // Without this it kept the pre-save flsNotes, so a later escalate
+      // (which spreads selectedIssue for display) persisted the stale copy and
+      // the notes just saved appeared lost.
+      setSelectedIssue(prev => (prev && prev.id === selectedIssue.id
+        ? { ...prev, flsNotes: noteText }
+        : prev))
       setFlsNotes('')
       setError(null)
     } catch (err) {
