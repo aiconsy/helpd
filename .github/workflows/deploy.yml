@@ -46,6 +46,13 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    # Secrets cannot be referenced directly in a step-level `if` (the secrets
+    # context is unavailable there), so mirror them into env vars, which the
+    # step conditions below can read.
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.PROJECT_ID }}
     
     steps:
     - uses: actions/checkout@v4
@@ -70,7 +77,7 @@ jobs:
       # belt-and-braces deploy. Without this guard it hard-fails with
       # "Input required and not supplied: vercel-token" and marks the whole
       # run red on every push — a false failure that hides real breakage.
-      if: ${{ secrets.VERCEL_TOKEN != '' && secrets.ORG_ID != '' && secrets.PROJECT_ID != '' }}
+      if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != '' }}
       uses: amondnet/vercel-action@v25
       with:
         vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -79,6 +86,6 @@ jobs:
         vercel-args: '--prod'
 
     - name: Note skipped Vercel deploy
-      if: ${{ secrets.VERCEL_TOKEN == '' || secrets.ORG_ID == '' || secrets.PROJECT_ID == '' }}
+      if: ${{ env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == '' }}
       run: |
         echo "::notice title=Vercel deploy skipped::VERCEL_TOKEN / ORG_ID / PROJECT_ID are not set, so the CLI deploy step was skipped. Vercel's GitHub integration still deploys main automatically. To enable this step, add the three repository secrets."
